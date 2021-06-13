@@ -1,0 +1,652 @@
+---
+title: "Comprobación de hipótesis con técnica Ji cuadrada"
+author: 
+      - "Dr. Oscar V. De la Torre Torres"
+      - "Facultad de Contaduría y Ciencias Administrativas"
+      - "Universidad Michoacana de San Nicolás de Hidalgo"
+output: 
+  bookdown::html_document2:
+    toc: TRUE
+    toc_float: TRUE
+    toc_depth: 4
+runtime: shiny
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+library(shiny)
+library(plotly)
+library(openxlsx)
+library(kableExtra)
+library(DT)
+library(pander)
+library(tibble)
+library(MASS)
+library(gghighlight)
+library(kableExtra)
+library(shinyalert)
+library(shinyWidgets)
+library(stargazer)
+library(ggpubr)
+library(PearsonDS)
+```
+
+```{r, echo=FALSE, out.width="25%", fig.align="center"}
+knitr::include_graphics("umsnh100a.jpg")
+```
+
+# Introducción a la distribución Ji cuadrada ($\chi_i^2$)
+
+La comprobación de hipótesis técnica clásica, tal como se planteó en [las notas correspondientes](https://oscardelatorretorres.shinyapps.io/CompHipotesisClasica/?_ga=2.227822878.202561051.1623025489-621833912.1609817228), es una técnica estadística para demostrar la validez de una afirmación o hipótesis sobre la media muestral ($\bar{X}$) de una´sola muestra o sobre una diferencia de medias ($\bar{D}$) de un **par** de muestras. Dado esto, el empleo de la función de probabilidad gaussiana o t-Student es adecuado.
+
+Dado lo anterior, también pueden darse ocasiones en que quieran demostrarse hipótesis sobre el comportamiento de la **varianza muestral** o hacer comprobaciones de hipótesis con parámetros cuyas variables no son aleatorias simples ($x_i$), sino aleatorias cuadráticas ($x_i^2$). Esto lleva a observar el dominio (conjunto de valores) que podría tener una variable aleatoria simple ($x_i$) v.s. el de una variable aleatoria cuadrática como la varianza muestral $s_{x_i}^2$:
+
+- $x_i \in (-\infty, \infty)$
+- $x^2_i \in [0, \infty)$
+
+Como se puede apreciar, una variable aleatoria medida con números reales podría tener valores desde $-\infty$ a $\infty$, cuando una cuadrática su valor más bajo es el $0$. Dado este simple hecho, el emplear las funciones de probabilidad gaussiana (o normal) o t-Student, es muy limitado ya que solo una parte de sus valores se utilizarían (solo los positivos).
+
+Dado esto, Karl Pearson, se percató de la necesidad de una función de probabilidad que sirviera para modelar el comportamiento aleatorio de una variable aleatoria cuadrática. Para esto, demostró la validez de la función de probabilidad **ji-cuadrada** ($\chi_i^2$), también conocida como **chi-cuadrada**. La misma tiene la siguiente forma funcional o ecuación:
+
+\begin{equation}
+P(x_i^2)=\frac{\left( \frac{1}{2}\right)^\left( \frac{\nu}{2}\right)}{\Gamma\left(\frac{\nu}{2}\right)}x_i^{\frac{\nu}{2}-1}e^{\frac{-x}{2}}
+(\#eq:chi2)
+\end{equation}
+
+Como se puede apreciar, la misma depende de los valores de la variable aleatoria cuadrática ($x_i^2$) y de los grados de libertad $\nu$. Esto, de manera similar a la función de probabilidad t-Student. La gráfica de la función de probabilidad $\chi_i^2$ se expone en el siguiente gráfico interactivo en donde se puede, para valores de $x_i^2\in [0, 150]$ y de $\nu\in [1,100]$, ver las diferentes formas que puede tener la función de probabildiad estudiada.
+
+```{r pruebahipotesisjicuad, results='asis', message=FALSE, warning=FALSE, error=FALSE}
+# Valores fijos:
+Ji=seq(from=0,to=150,by=0.1)
+
+# Botón de configuración de gráfica
+  siji1=sliderInput("alpha","Por favor eliga el nivel de probabilidad del valor crítico",min=1,max=99,value=2,step=1)
+  
+  siji2=sliderInput("lambda","Por favor eliga los grados de libertad",min=1,max=100,value=2,step=1)
+
+PIJI=reactive({
+  piji=dchisq(Ji,df=input$lambda)
+  piji
+})
+
+PIJIH0=reactive({
+  pijiho=max(PIJI())/2
+})
+
+QJI=reactive({
+  qji=qchisq((input$alpha/100),df=input$lambda)
+})
+
+#=====Gráfica de salida =======
+Figji1=renderPlotly({
+
+figji1=ggplot()+
+  geom_line(aes(x=Ji,y=PIJI()*100),colour="#3293a8")+
+  geom_vline(xintercept=QJI(),colour="orange")+
+  annotate("text",x=QJI(), y= PIJIH0()*100, 
+           label=paste("Valor crítico al ",input$alpha," %:",round(QJI(),4),sep=""))+
+  xlab("Valores Ji-cuadrada")+
+  ylab("Probabilidad Ji-cuadrada (%)")
+
+figji1
+})
+
+fluidPage(
+    fluidRow(
+      column(3,siji1,siji2),
+      column(9,Figji1)
+    )
+)
+
+```
+
+De manera complementaria, se puede apreciar, con una línea vertical naranja, el valor crítico superior que podría tener la función de probabilidad, dados los grados de libertad $\nu$ y el nivel de confianza o probabilidad de suceso.
+
+En términos muy simples, una variable aleatoria $\chi^2_i$ no es más que la suma de todos los valores normal estándar ($z_i$), elevados al cuadrado, sumados de $ºz_{-infty}$ a $z_{i}$:
+
+\begin{equation}
+\chi^2_i=\sum_{-\infty}^i z_i
+(\#eq:chixi)
+\end{equation}
+
+# Aplicaciones de la función de probabilidad $\chi^2_i$ y su prueba de hipótesis
+
+Esta función de probabilidad resultará de mucha utilidad para modelar el comportamiento de los posibles estadísticos $\xi_i^2$ cuyas aplicaciones, de entre muchas que puede tener esta función de probabilidad, se mencionan a continuación:
+
+1. Estadístico para comparar una varianza muestral $s^2_i$ con una objetivo $\sigma^2_{H_0}$: $\sigma_{H_0}^2$: $\chi_i^2=\frac{s^2_i\cdot (n-1)}{\sigma^2_{H_0}}$
+2. Prueba de independencia entre 2 variables: $\chi_i^2=\sum_i \sum_j \frac{(f_{i,j}-e_{i,j})^2}{e_{i,j}}$.
+3. Prueba de bondad de ajuste con el estadístico Jarque-Bera para definir si una variable aleatoria está normalmente distribuida: $\chi_i^2=\frac{n}{6}\left( \text{sesgo}^2_{x_i}+\frac{1}{4}(\text{curtosis}-3)^2\right)$
+4. Pruebas de homoscedasticidad (White, ARCH de Engle) o correlación serial (prueba L-M) en Econometría, Bioestadística, Astrofísica, Quimiometría o Cliometría.
+
+Dado que estas notas son de corte introductorio, se revisarán los 4 primeros casos. Para estudiantes de nivel bachillerato y licenciatura se revisará solamente las 3 primeras aplicaciones.
+Para estudiantes a nivel posgrado, se deja el estudio de las pruebas de bondad de ajuste restantes o, si se estudia alguna de las ciencias mencionadas en el empleo 5, los correspondientes estadísticos para su revisión en las materias correspondientes.
+
+Veamos la forma de la primera aplicación a continuación.
+
+## Empleo de la prueba $\chi^2_i$ para contrastar 2 varianzas {#contrasteVarianzas}
+
+Uno de los usos más simples y cuya lógica genera el resto de los 4 usos de la técnica $\chi^2_i$ es el comparar 2 varianzas que, **a priori** se sabe que son variables aleatorias cuadráticas de origen:
+
+\begin{equation}
+H_0: \sigma^2_{x_i}=\frac{\sum^n_{i=1}(x_i-\bar{X})^2}{n}
+\end{equation}
+
+La forma de hacer este contraste es muy sencilla. Simplemente deben seguirse los siguientes pasos:
+
+1. Estimar la varianza muestral $s_{x_i}^2$.
+2. Definir la varianza objetivo ($\sigma_{H_0}^2$) con la que se comparará la anterior. Esta puede ser un valor elegido como referencia en alguna aplicación económico-administrativa. Por ejemplo, demostrar que la varianza muestral en el llenado de latas de refresco ($s_{x_i}^2$) es igual a uno establecido por la norma oficial ($\sigma_{H_0}^2$).
+3. Estimar el estadístico para la prueba:
+
+\begin{equation}
+\chi_i^2=\frac{s^2_i\cdot (n-1)}{\sigma^2_{H_0}}
+(\#eq:chipruebavarianzas)
+\end{equation}
+
+4. Contrastar el estadístico anterior $\chi^2_i$ con el valor crítico superior, dado el nivel de confienza (el complemento del nivel de significancia $\alpha$). 
+5. Si el valor de $\chi^2_i$ se encuentra debajo de dicho valor crítico superior, se acepta la hipótesis nula general de que $H_0$:*"La varianza muestral $s_{x_i}^2$ es igual a la varianza objetivo $\sigma_{H_0}^2$"*. Esto último se debe al hecho de que la varianza muestral $s_{x_i}^2$ es igual o ligeramente superior a $\sigma_{H_0}^2$
+
+Si el estadístico se encuentra por arriba del valor crítico, se rechaza $H_0$ y se acepta la hipótesis alternativa $H_a$:*"La varianza muestral $s_{x_i}^2$ es diferente (mayor) a la varianza objetivo $\sigma_{H_0}^2$"*
+
+La lógica de esta prueba es muy simple: Cuando 2 varianzas son iguales, al dividirlas $s_{x_i}^2/\sigma_{H_0}^2=1$. Dado esto \@ref(eq:chipruebavarianzas) debe tener valores cercanos a 1. Esto implica que, incorporando el efecto del error muestral revisado en las [notas de Teoría del muestreo](https://oscardelatorretorres.shinyapps.io/TeoriaMuestreo/?_ga=2.160605374.202561051.1623025489-621833912.1609817228), el valor de $\chi_i^2$ puede ser:
+
+\begin{equation}
+\leq \chi_{i,\nu}^2 \leq \chi_{b,\nu}^2
+\end{equation}
+
+En donde $\chi_{b,\nu}^2$ es el valor crítico $\chi_{i,\nu}^2$ al $P \%$ de probabilidad ($P \%=100\%-\alpha$).
+
+Veamos un ejemplo para ilustrar esta aplicación.
+
+**Suponga que la desviación estándar del nivel de llenado de latas de refresco es de 20 ml y que la norma oficial pide que sea de 15 ml en el llenado objetivo de las latas. Esto dada una muestra de 30 latas. Con un 5\% de significancia demuestre que la empresa cumple con el objetivo de varianza (cuadrado de desviación estándar)**
+
+**Paso 1 definir la hipótesis nula y la alternativa**: Se definen las siguientes
+
+- $H_0$: "La varianza (o desviación estándar) del nivel de llenado de las latas de refresco fabricadas es igual a 15 ml".
+- $H_a$: "La varianza (o desviación estándar) del nivel de llenado de las latas de refresco fabricadas es mayor a 15 ml".
+
+**Paso 2 Establecer los datos de entrada**:
+
+- $s^2_{x_i}=20ml^2=(400ml)$
+- $\sigma^2_{H_0}=15ml^2=225ml$
+- $n=30$ (tamaño de muestra o número de datos)
+- $\nu=n-1=30-1=29$ (grados de libertad $\nu$)
+
+**Paso 3 determinar la regla de aceptación**:
+
+La regla de aceptación de $H_0$ se plantea como sigue: *Se acepta la hipótesis nula $H_0$ si el valor crítico $\chi_i^2$ es menor al valor crítico superior al 95\% de probabilidad de suceso.*
+
+**Paso 4 calcular el estadístico $\chi_i^2$ y el valor crítico para contrastar**:
+
+Siguiendo la fórmula \@ref(eq:chipruebavarianzas) el estadístico quedaría como sigue:
+
+\begin{equation}
+\chi_i^2=\frac{s^2_i\cdot (n-1)}{\sigma^2_{H_0}}=\frac{400ml\cdot (100-1)}{255ml}=51.5555
+\end{equation}
+
+```{r}
+# Número de datos (n) en la muestra y grados de libertad (gl)
+n=30
+gl=n-1
+
+# Calculando el estadístico ji-cuadrada de prueba:
+estadistico=(400*gl)/225
+
+estadistico
+```
+
+Esto lleva a un estadístico $\chi_i^2$ de `r round(estadistico,4)`.
+
+Para el valor crítico $\chi_b^2$ se utiliza el nivel de confianza (inverso del de significancia $\alpha$) como probabilidad de izquierda a derecha $pb=p_b=P(xi\leq b)=100\%-\alpha$. Esto lleva a lo siguiente:
+
+- Nivel de confianza o probabilidad de suceso: $100\%-\alpha=100\%-5\%=95\%$.
+
+Para obtener el valor $\chi_b^2$ se debe recurrir a los valores en tablas si se emplea un libro de texto de estadística. Sin embargo, se puede calcular tanto en `R` como en Excel con las siguientes sintaxis:
+
+- Excel: `=inv.chicuad(pb,[grados de libertad])`
+- R: `qchisq(pb,df=[grados de libertad])`
+
+Veamos el caso de `R` que puede evaluarse en estas notas:
+
+```{r}
+# Nivel de significancia apra el ejemplo:
+significancia=0.05
+
+# Definiendo el nivel de confianza dado el de significancia:
+confianza=1-significancia
+
+# Estableciendo la probabildiad acumulada dada por el nivel de confianza:
+pb=confianza
+
+xib=qchisq(pb,df=gl)
+xib
+```
+
+**Paso 4 contrastar el estadístico $\chi_i^2$ calculado en el paso 2 y contrastarlo con el valor crítico $\chi_b^2$**:
+
+Para hacer esto, se grafica el resultado con la función de probabilidad $\chi_i^2$ dados los grados de libertad $\nu=29$ (línea azul) y los valores crítico $\chi_b^2$ (línea vertical azul) y estadístico de prueba $\chi_i^2$ (línea naranja):
+
+
+```{r, echo=FALSE}
+# Valores de ji-cuadrada:
+xi=seq(from=0, to=100, by=0.01)
+# Probabilidad ji-cuadrada para los valores ji-cuadrada previos:
+pi=dchisq(xi,df=gl)
+  
+# Gráfica de función de probabilidad con ggplot:
+figji1=ggplot()+geom_line(aes(x=xi,y=pi),colour="black")
+
+# Se agrega la línea vertical del valor crítico:
+figji1=figji1+geom_vline(xintercept = xib,colour="orange")
+
+# Se agrega la línea del estadístico de prueba:
+figji1=figji1+geom_vline(xintercept = estadistico,colour="blue")
+
+# Se agregan las etiquetas de los ejes de la gráfica:
+
+figji1=figji1+xlab("Valores ji-cuadrada")+ylab("Probabilidad ji-cuadrada")+ggtitle("Contraste de varianza con prob. ji-cuadrada")
+
+# Se genera la gráfica interactica en ggplot:
+ggplotly(figji1)
+```
+
+**Paso 5 concluir**: Como se puede apreciar el estadístico $\chi_i^2$ (línea naranja) se encuentra arriba (mayor que) del valor crítico al 95\% de confianza $\chi_b^2$ (línea azul). Siguiendo la regla de aceptación de $H_0$ establecida en el paso 3 (que siempre será la misma para esta aplicación de la técnica ji-cuadrada), se rechaza la hipótesis nula de que la varianza del nivel de llenado de las latas de refreso es igual al objetivo de $\sigma_{H_0}^2=15ml$ y se acepta la alternativa de que $\sigma_{H_0}\geq 15ml$.
+
+Con este breve ejemplo se ilustra la forma de utilizar la técnica ji-cuadrada para fines de demostrar la igualdad de una varianza muestral $s_{x_i}^2$ respecto a una objetivo $\sigma_{H_0}^2$.
+
+Para tener una idea visual del contraste, se puede seguir el siguiente interactivo (similar al anterior) en donde se presentan tanto el estadístico ji-xuadrada calculado como el valor crítico. La puede utilizar para otros ejercicios o pruebas Ji-cuadrada similares a resolver.
+
+```{r pruebahipotesisjicuad2, results='asis', message=FALSE, warning=FALSE, error=FALSE}
+# Valores fijos:
+Ji2=seq(from=0,to=150,by=0.1)
+
+# Botón de configuración de gráfica
+  siji12=sliderInput("alpha2","Por favor eliga el nivel de significancia (%):",min=1,max=99,value=5,step=1)
+  
+  siji22=numericInput("lambda2",label="Grados de libertad:",
+                      min=0,value=29)
+  
+  biji12=numericInput("estji2",label="Estadístico ji cuadrada:",
+                     value=51.5555,step=1)
+
+PIJI2=reactive({
+  piji=dchisq(Ji2,df=input$lambda2)
+  piji
+})
+
+PIJIH02=reactive({
+  pijiho=max(PIJI2())/2
+})
+
+QJI2=reactive({
+  qji=qchisq(((100-input$alpha2)/100),df=input$lambda2)
+})
+
+JIQJI2=reactive({
+  colss=which(Ji2>input$estji2)
+  jiqji=c(input$estji2,Ji2[colss])
+})
+
+PVALUEJI2=reactive({
+  pvalueji=pchisq(input$estji2,df=input$lambda2,lower.tail=FALSE)
+})
+
+PIQJI2=reactive({
+  piqji=dchisq(JIQJI2(),df=input$lambda2)
+})
+
+observeEvent(input$estji2,{
+  if (is.na(input$estji2)){
+  updateNumericInput(session, "estji2", 
+                    value = 0)     
+  }
+})
+ESTJI=reactive({
+estji=input$estji2
+  estji
+})
+#=====Gráfica de salida =======
+Figji12=renderPlotly({
+
+figji12=ggplot()+
+  geom_line(aes(x=Ji2,y=PIJI2()*100),colour="#3293a8")+
+  geom_area(aes(x=JIQJI2(),y=PIQJI2()*100),fill="blue",alpha=0.2)+
+  geom_vline(xintercept=QJI2(),colour="orange")+
+  geom_vline(xintercept=ESTJI(),colour="blue")+
+  annotate("text",x=QJI2(), y= PIJIH02()*100, 
+           label=paste("Valor crítico al ",(100-input$alpha2)," %:",round(QJI2(),4),sep=""))+ 
+  annotate("text",x=ESTJI(), y= (PIJIH02()*0.65)*100, 
+           label=paste("Estadístico ji-cuadrada: ",input$estji2,sep=""))+   
+    annotate("text",x=ESTJI(), y= (PIJIH02()*0.5)*100, 
+           label=paste("P-value: ",round((PVALUEJI2()*100),4),"%",sep=""))+ 
+  xlab("Valores Ji-cuadrada")+
+  ylab("Probabilidad Ji-cuadrada (%)")
+figji12
+})
+
+fluidPage(
+    fluidRow(
+      column(3,siji12,siji22,biji12),
+      column(9,Figji12)
+    )
+)
+
+```
+
+## Empleo de la técnica ji-cuadrada para definir la independencia entre 2 variables
+
+Este uso no se revisará a detalle en estas notas ya que, para establecer la relación existente entre 2 o más vriables existen otro tipo de técnicas como la regresión, los modelos de análisis factorial, los análisis de cluster o los de clasificación que podrían ayudar a esto.
+
+Para la lectora o lector interesados, se sugiere acudir al capítulo 12.2 del libro de Anderson et. al. En el mismo se ilustra esta sencilla técnica de relacionar pares de variables.
+
+## Empleo de la técnica ji-cuadrada para determinar si una variable aleatoria está normalmente distribuida con la prueba Jarque-Bera 
+
+Esta prueba consiste en determinar si es válido el supuesto de que una variable aleatoria $x_i$ está normal o gaussianamente distribuida. Desde que se revisó el [tema de dicha probabilidad](https://oscardelatorretorres.shinyapps.io/ProbabilidadGaussianaTStudent/?_ga=2.197224620.202561051.1623025489-621833912.1609817228), se ha manejado un supuesto teórico de que es válido utilizar la funciónd e probabilidad normal si el número de datos en la muestra es $30\leq 30$ o $n\leq 5\%\text{ de }N$. Esto es un supuesto que es necesario verificar en la realidad, por lo que existen muchas pruebas cuantitativas (estadísticas) de **bondad de ajuste**. La bondad de ajuste es un término propio de la Estadística para determinar *qué tan bien explica una determinada función de probabilidad el comportamiento de una variable aleatoria*.
+
+En el caso específico de esta prueba, se tiene un criterio binario (ajusta o no) en el que se busca demostrar la siguiente hipótesis nula:
+
+$H_0:$*"La variable estudiada está normalmente distribuida"*
+
+Su hipótesis alternativa sería:
+
+$H_a:$*"La variable estudiada NO está normalmente distribuida"*
+
+La prueba de bondad de ajuste Jarque-Bera es una de las pruebas estadísticas más utilizadas en múltiples aplicaciones estadísticas, econométricas y de análisis económico y fue elaborada por un mexicano que ha destacado en el ámbito estadístico, económico y empresarial a nivel nacional e internacional: el [Dr. Carlos Jarque](https://es.wikipedia.org/wiki/Carlos_Jarque). El estadístico lo elaboró en colaboración con el Profesor [Anil K. Bera](https://en.wikipedia.org/wiki/Anil_K._Bera) de la Universidad Nacional de Australia. El mismo consiste en una prueba cuantitativa que diga, por medio de un contraste ji-cuadrada, si una variable aleatoria $x_i$ cumple con el supuesto de que sus valores puedan modelarse con la función de probabilidad de interés (gaussiana).
+
+El contraste ji-cuadrada del que se habla es el calcular un estadístico de prueba $JB$ tipo $\chi_i^2$ como el del paso 4 en el [empleo de la prueba $\chi^2_i$ para contrastar 2 varianzas](#contrasteVarianzas).
+
+Para comprender la prueba Jarque-Bera y la forma de calcular el estadístico correspondiente $JB$ deben introducirse dos conceptos muy importantes que caracterizan la función de probabilidad de probabilidad gaussiana (la forma de la gráfica). Estos son el sesgo y la curtosis.
+
+### El sesgo de una función de probabilidad
+
+El sesgo (*skewness* en idioma inglés) es la propiedad que permite que la función de probabilidad normal o gaussiana sea simétrica. Esto es, que se tenga la misma probabilidad de tener un número $x_i\leq \bar{X}$ o de lograr uno $\bar{X}\leq x_i$. El sesgo puede tener los siguientes valores:
+
+- $\text{sesgo}=0$ (el valor ideal) que implica que no hay sesgo y que la campana gaussiana es simétrica. Esto significa que los valores a la derecha (izquierda) de la media tienen la misma probabilidad de suceso que los de la izquierda (derecha).
+- $\text{sesgo}>0$ (sesgo positivo) que implica que los valores a la derecha la media tienen mayor probabilidad de suceso que los del lado izquierdo de la misma.
+- $\text{sesgo}<0$ (sesgo negativo) que implica que los valores a laizquierda de la media tienen mayor probabilidad de suceso que los de la derecha.
+
+Para ilustrar la idea del sesgo, se tiene la siguiente gráfica en donde se presentan 3 distribuciones de probabilidad. Una con sesgo de cero (línea azul), una con sesgo positivo ($\text{sesgo}=2$ línea naranja) y otra con sesgo negativo ($\text{sesgo}=-2$ línea verde menta):
+
+```{r echo=FALSE, warning=FALSE, error=FALSE, message=FALSE}
+library(fGarch)
+zi=seq(from=-6,to=6,by=0.1)
+zi3=seq(from=6,to=-6, by=-0.1)
+pi1=dnorm(zi,0,1)
+pi2=dsnorm(zi,mean=0, sd=1, xi=2)
+pi3=dsnorm(zi3,mean=0, sd=1, xi=2)
+
+figJB1=ggplot()+
+  geom_line(aes(x=zi,y=pi1*100),colour="blue")+
+  geom_line(aes(x=zi,y=pi2*100),colour="orange")+
+  geom_line(aes(x=zi,y=pi3*100),colour="#09E6A0")+
+  xlab("Valores de Xi")+
+  ylab("Probabilidad de suceso (%)")
+ggplotly(figJB1)
+```
+
+Como se puede apreciar, tanto las líneas naranja (sesgo positivo) como la verde menta (sego negativo) dejan de ser simétricas como la azul (sesgo de cero), razón por la cual pueden ser cualquier otra función de probabilidad excepto la gaussiana que **necesariamente** es insesgada ($\text{sesgo}=0$).
+
+La forma de cuantificar el nivel de sesgo que una variable aleatoria puede tener (sin necesidad de conocer *a priori* la función de probabilidad que modela su comportamiento) se estima de la siguiente manera:
+
+\begin{equation}
+\text{sesgo}=\frac{\sum^N_{i=1}(x_i-\bar{X})^3}{N\cdot s^3_{x_i}}
+(\#eq:sesgo)
+\end{equation}
+
+En la expresión anterior $s^3_{x_i}$ es la desviación estándar elevada al cubo ($s^3_{x_i}=(s_{x_i})^3$). Como se puede apreciar en la misma, las sumatoria del numerador elevada al cubo evita que se cancelen los términos con misma magnitud pero signo opuesto pero conserva el sentido (signo) de dichas magnitudes. Esto para captar con mayor claridad qué tan cargada están los datos de $x_i$ a la derecha ($\text{sesgo}>0$) o a la izquierda ($\text{sesgo}<0$). Como se dijo previamente, el valor ideal del sesgo es de cero para cumplir con el primer requisito necesario para decir que $x_i$ está gaussianamente distribuida.
+
+La forma de calcular la curtosis en Excel y `R` se especifica con los siguientes comandos:
+
+- Excel: `=coeficiente.asimetria([rango de datos de la variable aleatoria en excel])`
+- `R`: `skewness([objeto con datos de la variable aleatoria en R])`
+
+### La curtosis de una función de probabilidad 
+
+La curtosis (*kurtosis* en idioma inglés) mide el ancho de las colas o la campana de una función de probabilidad con esta forma. Para ilustrar la idea se expone el caso de 3 variables aleatorias con niveles de curtosis diferentes. La primera de ellas (línea azul), tiene el nivel de curtosis requerido para que una variable sea considerada normalmente distribuida ($\text{curtosis}=3$). A este tipo de probabilidad con el nivel de curtosis buscado se le llama *mesocúrtica*. La segunda (línea naranja) corresponde a una variable cuya curtosis o amplitud de campana es mayor a 3. A este tipo de probabilidad se le dice *probabilidad platocúrtica* por lo ancho de la amplitud citada. Por último, la línea verde menta ilustra la gráfica de una función de probabilidad con una curtosis menor a 3. A este tipo de función de probabilidad se le llama *leptocúrtica*.
+
+```{r, echo=FALSE, warning=FALSE, error=FALSE, message=FALSE}
+library(sn)
+zi=seq(from=-6,to=6,by=0.1)
+pi1k=dnorm(zi,0,1)
+pi2k=dnorm(zi,mean=0, sd=2)
+pi3k=dnorm(zi,mean=0, sd=0.5)
+
+figK1=ggplot()+
+  geom_line(aes(x=zi,y=pi1k*100),colour="blue")+
+  geom_line(aes(x=zi,y=pi2k*100),colour="orange")+
+  geom_line(aes(x=zi,y=pi3k*100),colour="#09E6A0")+
+  xlab("Valores de Xi")+
+  ylab("Probabilidad de suceso (%)")
+ggplotly(figK1)
+```
+
+Para estimar la curtosis se tiene el siguiente cálculo:
+
+\begin{equation}
+\text{curtosis}=\frac{\sum^N_{i=1}(x_i-\bar{X})^4}{N\cdot s^4_{x_i}}
+(\#eq:curtosis)
+\end{equation}
+
+La forma de estimar la curtosis en Excel y `R` es por medio de los siguientes comandos:
+
+- Excel: `=curtosis([Rango de datos de la variable aleatoria en Excel])`
+- `R`: `kurtosis([Objeto de R con los datos de la variable aleatoria])`
+
+### El estadístico Jarque-Bera y el contraste para la prueba de bondad de ajuste
+
+Ya que se introdujeon los conceptos de sesgo y curtosis, se puede presentar el estadístico Jarque-Bera para contrastar la hipótesis de normalidad en $x_i$:
+
+\begin{equation}
+JB=n\left(\frac{1}{6} \text{sesgo}^2+\frac{1}{4}(\text{curtosis}-3)^2\right)
+(\#eq:JarqueBera)
+\end{equation}
+
+Este estadístico está $\chi_i^2$ distribuido con $n-1$ grados de libertad. La regla de aceptación de la hipótesis nula $H_0$ es la misma que la del paso3 del tema del [empleo de la prueba $\chi^2_i$ para contrastar 2 varianzas](#contrasteVarianzas):
+
+*"Se acepta $H_0$ si el estadístico Jarque-Bera es menor al valor crítico superior $\chi_b^2$"*
+
+El valor crítico superior también tiene $n-1$ grados de libertad. Para ilustrar la idea, se tiene el ejemplo de una muestra de 250 observaciones de una variable aleatoria que *a priori* se sabe normalmente distribuida. Se hace, a pie o por pasoa, la prueba Jarque-Bera utilizando un 5% de significancia.
+
+```{r echo=TRUE, message=FALSE, error=FALSE, warning=FALSE}
+library(moments) # Librería utilizada para calculas el sesgo, curtosis y prueba Jarque-Bera en versión rápida con R:
+
+n=250 # número de datos a generar
+grados.libertad=n-1 # Grados de libertad
+
+# Se generan los 250 datos aleatorios normalmente distribuidos con media de cero y desviación estándar de 1:
+X=rnorm(250,mean=0,sd=1)
+
+# niveles de significancia y su correspondiente confianza:
+significancia=0.05
+confianza=1-significancia
+
+# Se calcula el sesgo:
+sesgo=skewness(X)
+
+# Se calcula la curtosis:
+curtosis=kurtosis(X)
+
+# Se calcula el valor crítico, dado el nivel de confianza
+val.critico=qchisq(confianza,df=grados.libertad)
+
+# Se calcula el estadístico Jarque-Bera:
+jarque.bera=n*(((sesgo^2)/6)+((curtosis-3)^2/4))
+
+# Se calcula el valor crítico 
+sesgo
+curtosis
+jarque.bera
+val.critico
+```
+
+Como se puede apreciar el valor crítico a 95\% de confianza (contrario al 5\% se significancia) es muy alto (`r round(val.critico,4)`) en coparación al estadístico Jarque-Bera de `r round(jarque.bera,4)`. Dado esto, se acepta la hipótesis nula de que los datos están normalmente distribuidos (algo que se sabía *a priori* al generar el vector `X` con variables aleatorias).
+
+Ahora veamos el mismo ejemplo pero con valores t-Student distribuidos con solo 5 grados de libertad (colas anchas que llevarán a una curtosis alta):
+
+```{r echo=TRUE, message=FALSE, error=FALSE, warning=FALSE}
+
+n=250 # número de datos a generar
+grados.libertad=n-1 # Grados de libertad
+
+# Se generan los 250 datos aleatorios normalmente distribuidos con media de cero y desviación estándar de 1:
+X=rt(250,df=5)
+
+# niveles de significancia y su correspondiente confianza:
+significancia=0.05
+confianza=1-significancia
+
+# Se calcula el sesgo:
+sesgo=skewness(X)
+
+# Se calcula la curtosis:
+curtosis=kurtosis(X)
+
+# Se calcula el valor crítico, dado el nivel de confianza
+val.critico=qchisq(confianza,df=grados.libertad)
+
+# Se calcula el estadístico Jarque-Bera:
+jarque.bera=n*(((sesgo^2)/6)+((curtosis-3)^2/4))
+
+# Se calcula el valor crítico 
+sesgo
+curtosis
+jarque.bera
+val.critico
+```
+
+Como se puede apreciar ahora el valor crítico a 95\% de confianza (contrario al 5\% se significancia) es muy bajo (`r round(val.critico,4)`) en comparación al estadístico Jarque-Bera de `r round(jarque.bera,4)`. Dado esto, se rechaza la hipótesis nula de que los datos están normalmente distribuidos (algo que se sabía también *a priori* al generar el vector `X` con variables aleatorias) y se acepta la alternatida de que *no están normalmente distribuidos*.
+
+Veamos ahora cómo se haría esto de manera directa con el comando `jarque.test()` de `R`:
+
+```{r echo=TRUE, message=FALSE, error=FALSE, warning=FALSE}
+
+n=250 # número de datos a generar
+grados.libertad=n-1 # Grados de libertad
+
+# Se generan los 250 datos aleatorios normalmente distribuidos con media de cero y desviación estándar de 1:
+X=rt(250,df=5)
+
+# Prueba Jarque-Bera directa:
+JB=jarque.test(X)
+JB
+```
+
+Como se peude apreciar en este nuevo conjunto de 250 datos aleatorios t-Student distribuidos, ahora el estadístico Jarque-Bera es muy alto (`r round(JB$statistic,4)`), el cual tiene un p-value (probabilidad acumulada de derecha a izquierda) de `r round(JB$p.value,4)` o `r round(JB$p.value,4)*100`\%. Esto implica que el valor está muy por arriba (mayor) que los valores críticos al 10\%, 5\% o incluso 1\%, lo que nos lleva a rechazar la hipótesis nola de que los valores de `X` están normalmente distribuidos.
+
+Ya que se vió la lógica de la prueba Jarque-Bera para demostrar la bondad de ajuste de una simple hipótesis nula $H_0:$*"Los datos de la variable aleatoria $x_i$ están normalmente distribuidos"*, se revisarán otras pruebas que antecedieron a la misma pero que sirven para los mismos fines buscados y son un poco más versátiles al poder ser utilizadas para demostrar la bondad de ajuste de otras funciones de probabilidad ajenas a la gaussiana o normal.
+
+
+### Calculadora en línea del estadístico Jarque-Bera
+
+En esta sub sección se presenta una calculadora interactiva para el estadístico Jarque-Bera, misma que puede utilizar para futuras aplicaciones.
+
+```{r pruebahipotesisjicuad3, results='asis', message=FALSE, warning=FALSE, error=FALSE}
+# Valores fijos:
+
+RV=reactiveValues(
+  Ji3=seq(from=0,to=150,by=0.1)
+)
+
+# Botón de configuración de gráfica
+  siji13=sliderInput("alpha3","Por favor eliga el nivel de significancia (%):",min=1,max=99,value=5,step=1)
+  
+  biji13=numericInput("n3",label="n:",
+                     value=10,step=1)
+  biji13b=numericInput("sesgo3",label="Sesgo:",
+                       min=-10000,
+                     value=0,step=0.1)  
+  biji13c=numericInput("curtosis3",label="Curtosis:",
+                     value=3,step=1)
+  
+LAMBDA3=reactive({
+  lambdaa=input$n3-1
+  lambdaa
+})  
+
+PIJI3=reactive({
+  piji=dchisq(RV$Ji3,df=LAMBDA3())
+  piji
+})
+
+PIJIH03=reactive({
+  pijiho=max(PIJI3())/2
+})
+
+QJI3=reactive({
+  qji=qchisq(((100-input$alpha3)/100),df=LAMBDA3())
+})
+
+JIQJI3=reactive({
+  colss=which(RV$Ji3>JB3())
+  jiqji=c(JB3(),RV$Ji3[colss])
+})
+
+PVALUEJI3=reactive({
+  pvalueji=pchisq(JB3(),df=LAMBDA3(),lower.tail=FALSE)
+})
+
+PIQJI3=reactive({
+  piqji=dchisq(JIQJI3(),df=LAMBDA3())
+})
+
+MAXX3=reactive({
+  maxx=max(150,max(qchisq(0.999,df=LAMBDA3()),
+                JB3()*1.2))
+})
+
+observeEvent(input$n3,{
+  RV$Ji3=seq(from=0,to=MAXX3(),by=0.1)
+})
+
+observeEvent(input$sesgo3,{
+  RV$Ji3=seq(from=0,to=MAXX3(),by=0.1)
+})
+
+observeEvent(input$curtosis3,{
+  RV$Ji3=seq(from=0,to=MAXX3(),by=0.1)
+})
+
+observeEvent(input$estji3,{
+  if (is.na(input$estji3)){
+  updateNumericInput(session, 
+                     "estji3", 
+                    value = 0)     
+  }
+})
+
+JB3=reactive({
+jb=input$n3*(((1/6)*(input$sesgo3^2))+((1/4)*((input$curtosis3-3)^2)))
+  jb
+})
+#=====Gráfica de salida =======
+Figji13=renderPlotly({
+
+figji13=ggplot()+
+  geom_line(aes(x=RV$Ji3,y=PIJI3()*100),colour="#3293a8")+
+  geom_area(aes(x=JIQJI3(),y=PIQJI3()*100),fill="blue",alpha=0.2)+
+  geom_vline(xintercept=QJI3(),colour="orange")+
+  geom_vline(xintercept=JB3(),colour="blue")+
+  annotate("text",x=QJI3(), y= round(PIJIH03()*100,2), 
+           label=paste("Valor crítico al ",(100-input$alpha3)," %:",round(QJI3(),2),sep=""))+ 
+  annotate("text",x=JB3(), y= round((PIJIH03()*0.65)*100,2), 
+           label=paste("Jarque-Bera: ",round(JB3(),2),sep=""))+   
+    annotate("text",x=JB3(), y= round((PIJIH03()*0.5)*100,2), 
+           label=paste("P-value: ",round((PVALUEJI3()*100),2),"%",sep=""))+ 
+  xlab("Valores Ji-cuadrada")+
+  ylab("Probabilidad Ji-cuadrada (%)")
+figji13
+})
+
+fluidPage(
+    fluidRow(
+      column(3,siji13,biji13,biji13b,biji13c),
+      column(9,Figji13)
+    )
+)
+
+```
+
+## Empleo de la técnica ji-cuadrada en pruebas de homoscedasticidad (White, ARCH de Engle) o correlación serial (prueba L-M) en Econometría
+
+Esta aplicación de la técnica Ji-cuadrada no se revisará aquí ya que es propia del tema de estudio de la Econometría. La misma se lleva en grados de licenciatura como son Economía, Actuaría, Finanzas o adminsitración financiera, Bioestadística o de algunos posgrados en materias Económicas, financieras, administrativas o grados que requieran análisis estadístico más avanzado.
+
+Dado esto se menciona solamente el uso, dejando su revisión a notas más avanzadas como pueden ser los [apuntes de Econometría elaborados por el autor](https://www.rpubs.com/odelatorre/intro_MCO_Econometria).

@@ -1,0 +1,13 @@
+name: CompHipotesisClasica
+title: CompHipotesisClasica
+username:
+account: oscardelatorretorres
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 4182898
+bundleId: 4685245
+url: https://oscardelatorretorres.shinyapps.io/CompHipotesisClasica/
+when: 1623025617.38782
+lastSyncTime: 1623025617.38782
+asMultiple: FALSE
+asStatic: FALSE
